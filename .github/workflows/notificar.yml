@@ -1,0 +1,32 @@
+name: Enviar notificación a TODOS los dispositivos
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - '**.txt'
+      - '**.md'
+      - 'index.html'
+
+jobs:
+  enviar-notificacion-masiva:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enviar notificación al TOPIC (todos los dispositivos)
+        run: |
+          curl -X POST \
+            -H "Authorization: key=${{ secrets.FCM_SERVER_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "to": "/topics/campana-general",
+              "notification": {
+                "title": "📝 Bloc de Notas",
+                "body": "Alguien ha actualizado el bloc. ¡Revisa los cambios!",
+                "sound": "default",
+                "vibrate": [200, 100, 200]
+              }
+            }' \
+            https://fcm.googleapis.com/fcm/send
+            
+      - name: Mostrar resultado
+        run: echo "✅ Notificación enviada a TODOS los dispositivos suscritos"
