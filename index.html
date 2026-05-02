@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#667eea">
+    <title>Bloc de Notas Cloud - Notificaciones para todos</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            transition: background 0.3s, color 0.3s;
+        }
+        body.dark-mode {
+            background: #1a1a2e;
+            color: #eee;
+        }
+        body.dark-mode .config-panel,
+        body.dark-mode .nota-form,
+        body.dark-mode .nota-card {
+            background: #2d2d44;
+            color: #eee;
+        }
+        body.dark-mode .nota-titulo { color: #eee; }
+        body.dark-mode .nota-contenido { color: #ccc; }
+        body.dark-mode .status.info { background: #3a3a5a; color: #ddd; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; color: white; margin-bottom: 30px; }
+        .config-panel, .nota-form {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: background 0.3s;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+        button:hover { transform: scale(1.02); background: #764ba2; }
+        .btn-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.info { background: #d1ecf1; color: #0c5460; }
+        .notas-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        .nota-card {
+            background: white;
+            padding: 18px;
+            border-radius: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s, background 0.3s;
+        }
+        .nota-card:hover { transform: translateY(-3px); }
+        .nota-titulo {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 12px;
+            border-left: 4px solid #667eea;
+            padding-left: 12px;
+        }
+        .nota-contenido { color: #555; margin-bottom: 12px; word-wrap: break-word; line-height: 1.5; }
+        .nota-contenido a { color: #667eea; text-decoration: none; border-bottom: 1px solid #667eea; }
+        .nota-fecha { font-size: 0.75em; color: #999; margin-top: 12px; }
+        .btn-eliminar { background: #dc3545; padding: 8px 16px; font-size: 13px; margin-top: 8px; }
+        .sync-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            padding: 10px 16px;
+            border-radius: 30px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 1000;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+        }
+        .sync-dot { width: 10px; height: 10px; border-radius: 50%; background: #28a745; }
+        .sync-dot.syncing { background: #ffc107; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .empty-state { text-align: center; color: white; padding: 50px; background: rgba(255,255,255,0.1); border-radius: 20px; }
+        footer { text-align: center; margin-top: 30px; color: white; opacity: 0.7; font-size: 12px; }
+        .btn-noti { background: #28a745; margin-right: 10px; }
+        .btn-noti.activado { background: #6c757d; cursor: default; }
+        .toast-noti {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            background: #333;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .info-token {
+            position: fixed;
+            bottom: 140px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            color: #0f0;
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 9px;
+            font-family: monospace;
+            max-width: 80%;
+            word-break: break-all;
+            z-index: 1000;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>📝 Bloc de Notas Cloud</h1>
+        <p>Sube imágenes a Imgur | Modo oscuro | 🔔 Notificaciones para TODOS los dispositivos</p>
+    </div>
+
+    <div class="config-panel">
+        <h3>⚙️ Configuración de GitHub</h3>
+        <div class="config-group">
+            <label>🔑 GitHub Token:</label>
+            <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off">
+        </div>
+        <div class="config-group">
+            <label>📁 ID del Gist:</label>
+            <input type="text" id="gistId" placeholder="Déjalo vacío para crear uno nuevo">
+        </div>
+        <div class="btn-group">
+            <button class="btn-sync" onclick="guardarConfiguracion()">💾 Guardar</button>
+            <button onclick="sincronizarDesdeGitHub()">📥 Sincronizar ahora</button>
+            <button onclick="subirAGitHub()">📤 Subir a GitHub</button>
+            <button onclick="toggleModoOscuro()" style="background: #6c757d;">🌙 Modo oscuro</button>
+            <button id="btnNotificaciones" class="btn-noti" style="background: #28a745;">🔔 Activar notificaciones</button>
+        </div>
+        <div id="statusMessage" class="status info">✅ Listo</div>
+    </div>
+
+    <div class="nota-form">
+        <input type="text" id="titulo" placeholder="📌 Título">
+        <textarea id="contenido" placeholder="✍️ Escribe aquí..."></textarea>
+        <div class="btn-group">
+            <button onclick="guardarNota()">💾 Guardar Nota</button>
+            <button onclick="pegarYCerrar()" style="background: #17a2b8;">📋 Pegar, guardar y cerrar</button>
+            <button onclick="cerrarVentana()" style="background: #6c757d;">❌ Cerrar</button>
+            <button onclick="subirImagen()" style="background: #28a745;">🖼️ Subir imagen (Imgur)</button>
+            <button onclick="exportarHTML()" style="background: #dc3545;">📄 Exportar a HTML</button>
+        </div>
+    </div>
+
+    <div id="notas-container" class="notas-grid"></div>
+    <footer>🔗 Usa: ?token=TOKEN&gist=GIST_ID | 🌙 Modo oscuro | 🔔 Notificaciones para TODOS</footer>
+</div>
+
+<div class="sync-indicator">
+    <div class="sync-dot" id="syncDot"></div>
+    <span id="syncStatus">Local</span>
+</div>
+
+<div id="toastNoti" class="toast-noti"></div>
+<div id="infoToken" class="info-token"></div>
+
+<script type="module">
+    // ============================================
+    // 🔧 CONFIGURACIÓN DE FIREBASE
+    // ============================================
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
+    import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-messaging.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyBowQFEXv4_1Pu9ssR1fLdgsvevdbIhN4M",
+        authDomain: "ciau-5d2b2.firebaseapp.com",
+        projectId: "ciau-5d2b2",
+        storageBucket: "ciau-5d2b2.firebasestorage.app",
+        messagingSenderId: "288289997943",
+        appId: "1:288289997943:web:cdea93ad690620247c3272"
+    };
+
+    const VAPID_KEY = "BFbdhILmpwEelCC0Pp2vcOMGwXFVTB-95Pv2nsCc90mDFs1GL-k4W3QY-zrVddlTE8VKNjvwrmNkn-THPLhLG0k";
+    const TOPIC_CAMPANA = "campana-general";
+
+    const app = initializeApp(firebaseConfig);
+    const messaging = getMessaging(app);
+
+    let notas = [];
+    let config = { token: '', gistId: '' };
+
+    // Detectar si es PC
+    function isPC() { return window.innerWidth >= 1024; }
+
+    function toggleModoOscuro() {
+        document.body.classList.toggle('dark-mode');
+        localStorage.setItem('modo_oscuro', document.body.classList.contains('dark-mode'));
+        mostrarStatus(document.body.classList.contains('dark-mode') ? '🌙 Modo oscuro activado' : '☀️ Modo claro activado', 'info');
+    }
+
+    function cargarModoOscuro() {
+        if (localStorage.getItem('modo_oscuro') === 'true') document.body.classList.add('dark-mode');
+    }
+
+    function cargarParametrosURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const tokenURL = urlParams.get('token');
+        const gistURL = urlParams.get('gist');
+        if (tokenURL) {
+            document.getElementById('githubToken').value = tokenURL;
+            config.token = tokenURL;
+            localStorage.setItem('github_token', tokenURL);
+            mostrarStatus('✅ Token cargado desde enlace', 'success');
+        }
+        if (gistURL) {
+            document.getElementById('gistId').value = gistURL;
+            config.gistId = gistURL;
+            localStorage.setItem('github_gist_id', gistURL);
+            mostrarStatus('✅ Gist cargado desde enlace', 'success');
+        }
+        if (config.token && config.gistId) setTimeout(() => sincronizarDesdeGitHub(), 1000);
+    }
+
+    async function subirImagen() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.style.display = 'none';
+        
+        input.onchange = async function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            mostrarStatus('📤 Subiendo imagen a Imgur...', 'info');
+            if (file.size > 10 * 1024 * 1024) {
+                mostrarStatus('❌ La imagen es muy grande (máx 10MB)', 'error');
+                document.body.removeChild(input);
+                return;
+            }
+            const formData = new FormData();
+            formData.append('image', file);
+            try {
+                const response = await fetch('https://api.imgur.com/3/image', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Client-ID 546c25a59c58ad7' },
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    const imageUrl = data.data.link;
+                    const textarea = document.getElementById('contenido');
+                    textarea.value += `\n📸 Imagen:\n${imageUrl}\n`;
+                    mostrarStatus('✅ Imagen subida a Imgur. Guarda la nota para verla', 'success');
+                } else mostrarStatus('❌ Error al subir la imagen a Imgur', 'error');
+            } catch (error) { mostrarStatus('❌ Error de conexión con Imgur', 'error'); }
+            document.body.removeChild(input);
+        };
+        document.body.appendChild(input);
+        input.click();
+    }
+
+    function convertirContenido(texto) {
+        let textoHtml = escapeHtml(texto);
+        textoHtml = textoHtml.replace(/(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/g, (match, p1, p2, p3, id) => {
+            const url = `https://www.youtube.com/watch?v=${id}`;
+            if (isPC()) {
+                return `<div style="margin: 10px 0; text-align: center;">
+                            <iframe width="250" height="141" src="https://www.youtube.com/embed/${id}" 
+                                    title="YouTube video" frameborder="0" 
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                    allowfullscreen style="border-radius: 10px; max-width: 100%;">
+                            </iframe>
+                            <div style="font-size: 0.7em; margin-top: 4px;">
+                                <a href="${url}" target="_blank" rel="noopener noreferrer">🎬 Abrir en YouTube</a>
+                            </div>
+                        </div>`;
+            } else {
+                const miniatura = `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
+                return `<div style="margin: 10px 0; text-align: center;">
+                            <a href="${url}" target="_blank" rel="noopener noreferrer">
+                                <img src="${miniatura}" alt="Miniatura del video" style="max-width: 100%; border-radius: 10px; cursor: pointer;">
+                            </a>
+                            <div style="font-size: 0.7em; margin-top: 4px;">
+                                <a href="${url}" target="_blank" rel="noopener noreferrer">🎬 Ver video en YouTube</a>
+                            </div>
+                        </div>`;
+            }
+        });
+        textoHtml = textoHtml.replace(/(https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp)(\?[^\s]*)?)/gi, (url) => {
+            let urlLimpia = url.split('?')[0];
+            return `<div style="margin: 10px 0; text-align: center;">
+                        <img src="${urlLimpia}" alt="imagen" style="max-width: 100%; border-radius: 10px; cursor: pointer;" 
+                             onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'">
+                        <div style="font-size: 0.7em; margin-top: 4px;">
+                            <a href="${url}" target="_blank" rel="noopener noreferrer">🔗 ${url}</a>
+                        </div>
+                    </div>`;
+        });
+        textoHtml = textoHtml.replace(/(https?:\/\/[^\s]+)/g, (url) => {
+            if (url.includes('youtube.com') || url.includes('youtu.be') || url.match(/\.(jpg|jpeg|png|gif|webp)/i)) return url;
+            return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+        });
+        textoHtml = textoHtml.replace(/\n/g, '<br>');
+        return textoHtml;
+    }
+
+    function exportarHTML() {
+        if (notas.length === 0) { mostrarStatus('❌ No hay notas para exportar', 'error'); return; }
+        let contenido = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Mis Notas</title><style>body{font-family:Arial;margin:40px;} .nota{border:1px solid #ddd;border-radius:10px;padding:15px;margin-bottom:20px;} .youtube-thumb{max-width:350px; width:100%; border-radius:10px; margin:10px 0;} .img-thumb{max-width:100%; border-radius:10px; margin:10px 0;}</style></head><body><h1>📝 Mis Notas</h1><div>Exportado el: ${new Date().toLocaleString()}</div><hr>`;
+        notas.forEach(n => {
+            let contenidoNota = escapeHtml(n.contenido);
+            contenidoNota = contenidoNota.replace(/(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/g, (match, p1, p2, p3, id) => {
+                const url = `https://www.youtube.com/watch?v=${id}`;
+                const miniatura = `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
+                return `<div style="margin:15px 0; text-align:center;"><a href="${url}" target="_blank"><img src="${miniatura}" alt="Miniatura del video" class="youtube-thumb" style="max-width:350px; width:100%; border-radius:10px;"></a><div><a href="${url}" target="_blank">🎬 Ver video: ${url}</a></div></div>`;
+            });
+            contenidoNota = contenidoNota.replace(/(https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp)(\?[^\s]*)?)/gi, (url) => {
+                let urlLimpia = url.split('?')[0];
+                return `<div style="margin:15px 0; text-align:center;"><a href="${url}" target="_blank"><img src="${urlLimpia}" alt="imagen" class="img-thumb" style="max-width:100%; border-radius:10px;" onerror="this.style.display='none'"></a><div><a href="${url}" target="_blank">📸 Ver imagen: ${url}</a></div></div>`;
+            });
+            contenidoNota = contenidoNota.replace(/(https?:\/\/[^\s]+)/g, (url) => {
+                if (url.includes('youtube.com') || url.includes('youtu.be') || url.match(/\.(jpg|jpeg|png|gif|webp)/i)) return url;
+                return `<div style="margin:10px 0;"><a href="${url}" target="_blank" rel="noopener noreferrer">🔗 ${url}</a></div>`;
+            });
+            contenidoNota = contenidoNota.replace(/\n/g, '<br>');
+            contenido += `<div class="nota"><h3>${escapeHtml(n.titulo)}</h3><div>${contenidoNota}</div><div>📅 ${n.fecha}</div></div>`;
+        });
+        contenido += `<hr><div>Generado desde Bloc de Notas Cloud</div></body></html>`;
+        const blob = new Blob([contenido], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `mis_notas_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.html`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        mostrarStatus('✅ Archivo HTML generado', 'success');
+    }
+
+    function pegarYCerrar() {
+        navigator.clipboard.readText().then(texto => {
+            if (texto && texto.trim() !== '') {
+                document.getElementById('contenido').value = texto;
+                guardarNota();
+                setTimeout(() => window.close(), 500);
+            } else mostrarStatus('❌ No hay nada copiado', 'error');
+        }).catch(() => mostrarStatus('❌ No se pudo leer el portapapeles', 'error'));
+    }
+
+    function cerrarVentana() { if (confirm('¿Cerrar esta pestaña?')) window.close(); }
+
+    function cargarConfiguracion() {
+        cargarParametrosURL();
+        const savedToken = localStorage.getItem('github_token');
+        const savedGistId = localStorage.getItem('github_gist_id');
+        if (savedToken && !config.token) { document.getElementById('githubToken').value = savedToken; config.token = savedToken; }
+        if (savedGistId && !config.gistId) { document.getElementById('gistId').value = savedGistId; config.gistId = savedGistId; }
+        cargarNotasLocales();
+        if (config.token && config.gistId) sincronizarDesdeGitHub();
+        cargarModoOscuro();
+    }
+
+    function guardarConfiguracion() {
+        config.token = document.getElementById('githubToken').value;
+        config.gistId = document.getElementById('gistId').value;
+        if (config.token) localStorage.setItem('github_token', config.token);
+        if (config.gistId) localStorage.setItem('github_gist_id', config.gistId);
+        mostrarStatus('✅ Configuración guardada', 'success');
+    }
+
+    function cargarNotasLocales() {
+        const notasGuardadas = localStorage.getItem('blocNotas');
+        if (notasGuardadas) { notas = JSON.parse(notasGuardadas); mostrarNotas(); }
+    }
+
+    function guardarNota() {
+        const titulo = document.getElementById('titulo').value;
+        const contenido = document.getElementById('contenido').value;
+        if (!titulo && !contenido) return alert('📝 Escribe algo');
+        const nota = { id: Date.now(), titulo: titulo || 'Sin título', contenido: contenido, fecha: new Date().toLocaleString(), timestamp: Date.now() };
+        notas.unshift(nota);
+        guardarNotasLocales();
+        document.getElementById('titulo').value = '';
+        document.getElementById('contenido').value = '';
+        mostrarNotas();
+        actualizarSyncStatus('local');
+        mostrarStatus('✅ Nota guardada', 'success');
+        if (config.token && config.gistId) subirAGitHub();
+    }
+
+    function guardarNotasLocales() { localStorage.setItem('blocNotas', JSON.stringify(notas)); }
+    function eliminarNota(id) { if (confirm('¿Eliminar esta nota?')) { notas = notas.filter(n => n.id !== id); guardarNotasLocales(); mostrarNotas(); actualizarSyncStatus('local'); mostrarStatus('🗑️ Nota eliminada', 'info'); if (config.token && config.gistId) subirAGitHub(); } }
+
+    async function subirAGitHub() {
+        if (!config.token) return;
+        actualizarSyncStatus('syncing');
+        const data = { description: 'Mis notas', public: false, files: { 'notas.json': { content: JSON.stringify(notas, null, 2) } } };
+        try {
+            let url = 'https://api.github.com/gists', method = 'POST';
+            if (config.gistId) { url = `https://api.github.com/gists/${config.gistId}`; method = 'PATCH'; }
+            const response = await fetch(url, { method, headers: { 'Authorization': `token ${config.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+            const result = await response.json();
+            if (response.ok) {
+                if (!config.gistId && result.id) { config.gistId = result.id; localStorage.setItem('github_gist_id', result.id); document.getElementById('gistId').value = result.id; }
+                actualizarSyncStatus('synced');
+            } else throw new Error(result.message);
+        } catch (error) { actualizarSyncStatus('error'); }
+    }
+
+    async function sincronizarDesdeGitHub() {
+        if (!config.token || !config.gistId) return;
+        actualizarSyncStatus('syncing');
+        try {
+            const response = await fetch(`https://api.github.com/gists/${config.gistId}`, { headers: { 'Authorization': `token ${config.token}` } });
+            if (response.ok) {
+                const gist = await response.json();
+                const notasContent = gist.files['notas.json']?.content;
+                if (notasContent) {
+                    const notasNube = JSON.parse(notasContent);
+                    const idsExistentes = new Set(notas.map(n => n.id));
+                    const nuevas = notasNube.filter(n => !idsExistentes.has(n.id));
+                    if (nuevas.length > 0) {
+                        notas = [...nuevas, ...notas];
+                        guardarNotasLocales();
+                        mostrarNotas();
+                        mostrarStatus(`🔄 ${nuevas.length} notas nuevas`, 'success');
+                    } else actualizarSyncStatus('synced');
+                }
+            }
+        } catch (error) { actualizarSyncStatus('error'); }
+    }
+
+    function mostrarNotas() {
+        const container = document.getElementById('notas-container');
+        if (notas.length === 0) { container.innerHTML = '<div class="empty-state">✨ No hay notas. ¡Crea tu primera nota!</div>'; return; }
+        container.innerHTML = notas.map(nota => `<div class="nota-card"><div class="nota-titulo">${escapeHtml(nota.titulo)}</div><div class="nota-contenido">${convertirContenido(nota.contenido)}</div><div class="nota-fecha">📅 ${nota.fecha}</div><button class="btn-eliminar" onclick="eliminarNota(${nota.id})">🗑️ Eliminar</button></div>`).join('');
+    }
+
+    function mostrarStatus(mensaje, tipo) {
+        const statusDiv = document.getElementById('statusMessage');
+        statusDiv.textContent = mensaje;
+        statusDiv.className = `status ${tipo}`;
+        setTimeout(() => { if (statusDiv.className.includes(tipo)) { statusDiv.className = 'status info'; statusDiv.textContent = '✅ Listo'; } }, 3000);
+    }
+
+    function actualizarSyncStatus(estado) {
+        const dot = document.getElementById('syncDot');
+        const status = document.getElementById('syncStatus');
+        switch(estado) {
+            case 'syncing': dot.className = 'sync-dot syncing'; status.textContent = 'Sincronizando...'; break;
+            case 'synced': dot.className = 'sync-dot'; dot.style.background = '#28a745'; status.textContent = 'Sincronizado ☁️'; break;
+            case 'local': dot.className = 'sync-dot'; dot.style.background = '#ffc107'; status.textContent = 'Solo local 💾'; break;
+            case 'error': dot.className = 'sync-dot'; dot.style.background = '#dc3545'; status.textContent = 'Error'; break;
+        }
+    }
+
+    function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+
+    // ============================================
+    // 🔔 NOTIFICACIONES PUSH CON TOPICS
+    // ============================================
+    let fcmToken = null;
+
+    function mostrarToast(mensaje) {
+        const toast = document.getElementById('toastNoti');
+        toast.textContent = mensaje;
+        toast.style.opacity = '1';
+        setTimeout(() => { toast.style.opacity = '0'; }, 3000);
+    }
+
+    async function suscribirATopic(token) {
+        try {
+            const serverKey = prompt('🔐 Para activar notificaciones para TODOS, pega la SERVER KEY de Firebase.\n\n📋 Está en el archivo JSON que descargaste (private_key)\n\nCópiala y pégala aquí (solo una vez):');
+            if (!serverKey) return false;
+            
+            const response = await fetch(`https://iid.googleapis.com/iid/v1/${token}/rel/topics/${TOPIC_CAMPANA}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `key=${serverKey}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                console.log('✅ Suscrito al topic:', TOPIC_CAMPANA);
+                localStorage.setItem('fcm_suscrito', 'true');
+                return true;
+            } else {
+                console.error('Error al suscribir:', await response.text());
+                return false;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            return false;
+        }
+    }
+
+    async function activarNotificaciones() {
+        if (!('Notification' in window)) {
+            mostrarStatus('❌ Tu navegador no soporta notificaciones', 'error');
+            return;
+        }
+        
+        const permiso = await Notification.requestPermission();
+        if (permiso !== 'granted') {
+            mostrarStatus('❌ Permiso denegado para notificaciones', 'error');
+            return;
+        }
+        
+        try {
+            fcmToken = await getToken(messaging, { vapidKey: VAPID_KEY });
+            console.log('✅ Token FCM:', fcmToken);
+            
+            const infoDiv = document.getElementById('infoToken');
+            infoDiv.style.display = 'block';
+            infoDiv.innerHTML = '📱 Token: ' + fcmToken.substring(0, 50) + '...';
+            
+            localStorage.setItem('fcm_token', fcmToken);
+            
+            const suscrito = await suscribirATopic(fcmToken);
+            
+            if (suscrito) {
+                mostrarToast('✅ Suscrito al canal. Recibirás avisos de TODOS.');
+                mostrarStatus('✅ Notificaciones activadas. Recibirás avisos de TODOS', 'success');
+            } else {
+                mostrarToast('⚠️ No suscrito al canal. Solo avisos individuales.');
+                mostrarStatus('⚠️ Notificaciones activadas parcialmente', 'info');
+            }
+            
+            const btn = document.getElementById('btnNotificaciones');
+            btn.textContent = '✅ Notificaciones activadas';
+            btn.style.background = '#6c757d';
+            btn.disabled = true;
+            
+            onMessage(messaging, (payload) => {
+                console.log('📨 Notificación recibida:', payload);
+                const titulo = payload.notification?.title || '📝 Nueva nota';
+                const cuerpo = payload.notification?.body || 'Alguien ha actualizado las notas';
+                new Notification(titulo, { body: cuerpo, icon: '/icon-192.png' });
+                mostrarToast(`🔔 ${titulo}: ${cuerpo}`);
+            });
+            
+        } catch (error) {
+            console.error('Error:', error);
+            mostrarStatus('❌ Error al activar notificaciones', 'error');
+        }
+    }
+
+    // Registrar Service Worker
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/firebase-messaging-sw.js')
+            .then(reg => console.log('✅ Service Worker registrado', reg))
+            .catch(err => console.log('❌ Service Worker error:', err));
+    }
+
+    window.addEventListener('resize', function() { mostrarNotas(); });
+    document.addEventListener('keydown', function(e) { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); guardarNota(); } });
+    document.addEventListener('DOMContentLoaded', function() { 
+        const campoTexto = document.getElementById('contenido'); 
+        if (campoTexto) campoTexto.focus();
+        
+        const btnNoti = document.getElementById('btnNotificaciones');
+        if (btnNoti) btnNoti.addEventListener('click', activarNotificaciones);
+        
+        if (localStorage.getItem('fcm_token')) {
+            btnNoti.textContent = '✅ Notificaciones activadas';
+            btnNoti.style.background = '#6c757d';
+            btnNoti.disabled = true;
+        }
+    });
+
+    setInterval(() => { if (config.token && config.gistId) sincronizarDesdeGitHub(); }, 10000);
+    document.addEventListener('visibilitychange', function() { if (!document.hidden && config.token && config.gistId) sincronizarDesdeGitHub(); });
+
+    cargarConfiguracion();
+</script>
+</body>
+</html>
